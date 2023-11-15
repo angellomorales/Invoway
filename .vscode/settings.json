@@ -1,0 +1,14 @@
+{
+    "al.codeAnalyzers": [     
+        "${CodeCop}","${UICop}"
+     ],
+    "CRS.ObjectNamePrefix": "Ditech_",
+    "CRS.OnSaveAlFileAction": "Reorganize",
+    "CRS.RemovePrefixFromFilename": false,
+    "CRS.RemoveSuffixFromFilename": false,
+    "CRS.FileNamePattern": "<ObjectNameShort>.<ObjectTypeShortPascalCase>.al",
+    "CRS.FileNamePatternExtensions": "<ObjectNameShort>.<ObjectTypeShortPascalCase>.al",
+    // "CRS.FileNamePatternExtensions": "<ObjectTypeShort><BaseId>-Ext<ObjectId>.<BaseNameShort>.al",
+    "CRS.ExtensionObjectNamePattern": "<Prefix><BaseNameShort>",
+    "al.enableCodeAnalysis": true,
+}
