@@ -1,7 +1,7 @@
 codeunit 50100 "Ditech_MessageMgt"
 {
 
-    procedure EntradaMercancia(Customer: record Customer)
+    procedure EntradaMercancia(PurchRcptHeader: record "Purch. Rcpt. Header")
     var
         Url: Text;
         SoapAction: Text;
@@ -10,12 +10,12 @@ codeunit 50100 "Ditech_MessageMgt"
         NameSpace: Text;
         NameSpaceValue: Text;
         Autext: Text;
-        StringBuilder: TextBuilder;
+        TextBuilder: TextBuilder;
     // Node1Txt: label '<b:int>';
     // Node2Txt: label '</b:int>';
     // Id: text;
     begin
-        EntradaMercanciaEnvelope(StringBuilder, Customer);
+        EntradaMercanciaEnvelope(TextBuilder, PurchRcptHeader);
 
         SoapAction := 'soapAction';
         ActionName := 'setGR';
@@ -25,49 +25,75 @@ codeunit 50100 "Ditech_MessageMgt"
         Url := 'Url';
         ActionParameter := 'request';
 
-        Autext := RequestWS(StringBuilder, ActionName, ActionParameter, Url, SoapAction, NameSpace, NameSpaceValue);
+        Autext := RequestWS(TextBuilder, ActionName, ActionParameter, Url, SoapAction, NameSpace, NameSpaceValue);
 
 
         // Id := COPYSTR(Autext, strpos(Autext, Node1Txt) + STRLEN(Node1Txt), strpos(Autext, Node2Txt) - (strpos(Autext, Node1Txt) + STRLEN(Node1Txt)));
 
     end;
 
-    local procedure EntradaMercanciaEnvelope(var StringBuilder: TextBuilder; Customer: record Customer)
+    local procedure EntradaMercanciaEnvelope(var TextBuilder: TextBuilder; PurchRcptHeader: record "Purch. Rcpt. Header")
     var
-        CountryRegion: record "Country/Region";
+        PurchRcptLine: Record "Purch. Rcpt. Line";
+        Vendor: Record Vendor;
+        CompanyInformation: Record "Company Information";
+        GeneralLEdgerSetup: Record "General Ledger Setup";
+        PurchLRcptineTextBuilder: TextBuilder;
+        totalEntrada: Decimal;
+        AmountLinea: Decimal;
     begin
-        if CountryRegion.get(Customer."Country/Region Code") then;
-        StringBuilder.Append('<Customers>');
-        StringBuilder.Append('<CustomerDetail>');
-        StringBuilder.Append('<Name>' + customer.Name + Customer."Name 2" + '</Name>');
-        if Customer.Blocked = Customer.Blocked::" " then
-            StringBuilder.Append('<CustomerType>Activo</CustomerType>')
+        PurchRcptLine.SetRange("Document No.", PurchRcptHeader."No.");
+        PurchRcptLine.SetFilter(Quantity, '<>0');
+        if PurchRcptLine.FindSet() then
+            repeat
+                PurchLRcptineTextBuilder.Append('<linea>');
+                PurchLRcptineTextBuilder.Append('<numeroLinea>' + Format(PurchRcptLine."Line No.") + '</numeroLinea>');
+                PurchLRcptineTextBuilder.Append('<referenciaItem>' + PurchRcptLine."No." + '</referenciaItem>');
+                PurchLRcptineTextBuilder.Append('<descripcion>' + PurchRcptLine.Description + '</descripcion>');
+                PurchLRcptineTextBuilder.Append('<unidadesLinea>' + Format(PurchRcptLine.Quantity) + '</unidadesLinea>');
+                PurchLRcptineTextBuilder.Append('<precioUnidad>' + Format(PurchRcptLine."Unit Price (LCY)") + '</precioUnidad>');
+                AmountLinea := PurchRcptLine.Quantity * PurchRcptLine."Unit Price (LCY)";
+                PurchLRcptineTextBuilder.Append('<totalLinea>' + Format(AmountLinea) + '</totalLinea>');
+                PurchLRcptineTextBuilder.Append('</linea>');
+                totalEntrada += AmountLinea;
+            until PurchRcptLine.Next() = 0;
+
+        CompanyInformation.Get();
+        TextBuilder.Append('<idFiscalCliente>' + CompanyInformation."VAT Registration No." + '</idFiscalCliente>');
+
+        TextBuilder.Append('<entrada>');
+
+        TextBuilder.Append('<idEntrada>' + PurchRcptHeader."No." + '</idEntrada>');
+        TextBuilder.Append('<fecha>' + Format(PurchRcptHeader."Posting Date") + '</fecha>');
+        GeneralLEdgerSetup.Get();
+        if PurchRcptHeader."Currency Code" <> '' then
+            TextBuilder.Append('<divisa>' + PurchRcptHeader."Currency Code" + '</divisa>')
         else
-            StringBuilder.Append('<CustomerType>Inactivo</CustomerType>');
-        StringBuilder.Append('<ExternalReference>' + Customer."No." + '</ExternalReference>');
-        StringBuilder.append('<PaymentTerms>' + Customer."Payment Method Code" + '_' + Customer."Payment Terms Code" + '</PaymentTerms>');
-        StringBuilder.Append('<CIF>' + Customer."VAT Registration No." + '</CIF>');
-        StringBuilder.Append('<Addresses>');
-        StringBuilder.Append('<Address>');
-        StringBuilder.Append('<Name>' + Customer.Name + Customer."Name 2" + '</Name>');
-        StringBuilder.Append('<Line1>' + Customer.Address + ' ' + Customer."Address 2" + '</Line1>');
-        StringBuilder.Append('<Line2>' + Customer.City + '</Line2>');
-        StringBuilder.Append('<Line3>' + customer.County + '</Line3>');
-        StringBuilder.Append('<Country>' + CountryRegion.Name + '</Country>');
-        StringBuilder.Append('<PostCode>' + customer."Post Code" + '</PostCode>');
-        if Customer."Phone No." = '' then
-            StringBuilder.Append('<Contacts/>')
-        else begin
-            StringBuilder.Append('<Contacts>');
-            StringBuilder.Append('<Contact>');
-            StringBuilder.Append('<CompanyNumber>' + Customer."Phone No." + '</CompanyNumber>');
-            StringBuilder.Append('</Contact>');
-            StringBuilder.Append('</Contacts>');
-        end;
-        StringBuilder.Append('</Address>');
-        StringBuilder.Append('</Addresses>');
-        StringBuilder.Append('</CustomerDetail>');
-        StringBuilder.Append('</Customers>');
+            TextBuilder.Append('<divisa>' + GeneralLEdgerSetup."LCY Code" + '</divisa>');
+        TextBuilder.Append('<documentoProveedor>' + PurchRcptHeader."Vendor Order No." + '</documentoProveedor>');
+        TextBuilder.Append('<documentoTransporte>' + PurchRcptHeader."Vendor Shipment No." + '</documentoTransporte>');
+        TextBuilder.Append('<totalEntrada>' + Format(totalEntrada) + '</totalEntrada>');
+        TextBuilder.Append('<idPedido>' + PurchRcptHeader."Order No." + '</idPedido>');
+        TextBuilder.Append('<indImpuestos>' + 'N' + '</indImpuestos>');
+
+        Vendor.get(PurchRcptHeader."Buy-from Vendor No.");
+        TextBuilder.Append('<proveedor>');
+        TextBuilder.Append('<idProveedor>' + Vendor."VAT Registration No." + '</idProveedor>');
+        TextBuilder.Append('<codigoProveedorERP>' + PurchRcptHeader."Buy-from Vendor No." + '</codigoProveedorERP>');
+        TextBuilder.Append('<nombreProveedor>' + Vendor.Name + '</nombreProveedor>');
+        TextBuilder.Append('<emailProveedor>' + Vendor."E-Mail" + '</emailProveedor>');
+        TextBuilder.Append('<telefonoProveedor>' + Vendor."Phone No." + '</telefonoProveedor>');
+        TextBuilder.Append('<direccionProveedor>' + Vendor.Address + ' ' + Vendor."Address 2" + '</direccionProveedor>');
+        TextBuilder.Append('<ciudadProveedor>' + Vendor.City + '</ciudadProveedor>');
+        TextBuilder.Append('<codigoPostalProveedor>' + Vendor."Post Code" + '</codigoPostalProveedor>');
+        TextBuilder.Append('<paisProveedor>' + Vendor."Country/Region Code" + '</paisProveedor>');
+        TextBuilder.Append('</proveedor>');
+
+        TextBuilder.Append('<lineas>');
+        TextBuilder.Append(PurchLRcptineTextBuilder.ToText());
+        TextBuilder.Append('</lineas>');
+
+        TextBuilder.Append('</entrada>');
     end;
 
     local procedure Export_XMLsend_toFile(TxtJSON: Text; NombreArchivo: Text)
@@ -88,7 +114,7 @@ codeunit 50100 "Ditech_MessageMgt"
         file.DownloadFromStream(InStream, DialogTitleLabelMsg, '', '', FileName);
     end;
 
-    local procedure RequestWS(StringBuilder: TextBuilder; ActionName: Text; ActionParameter: Text; Url: Text; SoapAction: Text; NameSpace: Text; NameSpaceValue: Text): Text
+    local procedure RequestWS(TextBuilder: TextBuilder; ActionName: Text; ActionParameter: Text; Url: Text; SoapAction: Text; NameSpace: Text; NameSpaceValue: Text): Text
     var
         HttpContent: HttpContent;
         HttpHeader: HttpHeaders;
@@ -104,7 +130,7 @@ codeunit 50100 "Ditech_MessageMgt"
         TxtContent.Append('<soapenv:Body>');
         TxtContent.Append('<' + NameSpace + ':' + ActionName + '>');
         TxtContent.Append('<' + NameSpace + ':' + ActionParameter + '>');
-        TxtContent.Append(StringBuilder.ToText());
+        TxtContent.Append(TextBuilder.ToText());
         TxtContent.Append('</' + NameSpace + ':' + ActionParameter + '>');
         TxtContent.Append('</' + NameSpace + ':' + ActionName + '>');
         TxtContent.Append('</soapenv:Body>');
@@ -124,7 +150,7 @@ codeunit 50100 "Ditech_MessageMgt"
         //     if not HttpResponseMessage.IsSuccessStatusCode then
         //         Error('Devuelve :\\Status code: %1\Description: %2', HttpResponseMessage.HttpStatusCode, HttpResponseMessage.ReasonPhrase);
         //     HttpResponseMessage.Content.ReadAs(Autext);
-        Message('Peticion:\\%1\\Respuesta:\\%2', TxtJSON, Autext);
+        // Message('Peticion:\\%1\\Respuesta:\\%2', TxtJSON, Autext);
         Export_XMLSend_toFile(TxtJSON, ActionName + 'Peticion');
         // Export_XMLSend_toFile(Autext, ActionName + 'Respuesta');
         exit(Autext);

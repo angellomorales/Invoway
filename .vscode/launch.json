@@ -9,7 +9,7 @@
             "server": "http://bc23w1",
             "serverInstance": "BC",
             "authentication": "Windows",
-            "startupObjectId": 22,
+            "startupObjectId": 145,
             "startupObjectType": "Page",
             "breakOnError": "All",
             "launchBrowser": true,

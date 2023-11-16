@@ -1,3 +1,4 @@
 /.alpackages
 /.snapshots
 /*.app
+/.vscode/.alcache
