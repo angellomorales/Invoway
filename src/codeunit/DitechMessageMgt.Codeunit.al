@@ -1,7 +1,7 @@
 codeunit 50100 "Ditech_MessageMgt"
 {
 
-    procedure EntradaMercancia(PurchRcptHeader: record "Purch. Rcpt. Header")
+    procedure EntradaMercancia(var PurchRcptHeader: record "Purch. Rcpt. Header")
     var
         Url: Text;
         SoapAction: Text;
@@ -9,8 +9,9 @@ codeunit 50100 "Ditech_MessageMgt"
         ActionParameter: Text;
         NameSpace: Text;
         NameSpaceValue: Text;
-        Autext: Text;
+        ReturnText: Text[500];
         TextBuilder: TextBuilder;
+        Success: Boolean;
     // Node1Txt: label '<b:int>';
     // Node2Txt: label '</b:int>';
     // Id: text;
@@ -22,11 +23,19 @@ codeunit 50100 "Ditech_MessageMgt"
         NameSpace := 'good';
         NameSpaceValue := 'goodsReceiptService';
 
-        Url := 'Url';
+        Url := 'https://pre.invoway.com/services/GoodsReceiptService?wsdl';
         ActionParameter := 'request';
 
-        Autext := RequestWS(TextBuilder, ActionName, ActionParameter, Url, SoapAction, NameSpace, NameSpaceValue);
+        Success := RequestWS(TextBuilder, ActionName, ActionParameter, Url, NameSpace, NameSpaceValue, ReturnText);
 
+        if Success then begin
+            PurchRcptHeader."Ditech_Invoway Timbrado" := true;
+            PurchRcptHeader."Ditech_Invoway Error" := '';
+        end
+        else
+            PurchRcptHeader."Ditech_Invoway Error" := ReturnText;
+
+        PurchRcptHeader.Modify();
 
         // Id := COPYSTR(Autext, strpos(Autext, Node1Txt) + STRLEN(Node1Txt), strpos(Autext, Node2Txt) - (strpos(Autext, Node1Txt) + STRLEN(Node1Txt)));
 
@@ -64,14 +73,14 @@ codeunit 50100 "Ditech_MessageMgt"
         TextBuilder.Append('<entrada>');
 
         TextBuilder.Append('<idEntrada>' + PurchRcptHeader."No." + '</idEntrada>');
-        TextBuilder.Append('<fecha>' + Format(PurchRcptHeader."Posting Date") + '</fecha>');
+        TextBuilder.Append('<fecha>' + Format(PurchRcptHeader."Posting Date", 0, 9) + '</fecha>');
         GeneralLEdgerSetup.Get();
         if PurchRcptHeader."Currency Code" <> '' then
             TextBuilder.Append('<divisa>' + PurchRcptHeader."Currency Code" + '</divisa>')
         else
             TextBuilder.Append('<divisa>' + GeneralLEdgerSetup."LCY Code" + '</divisa>');
         TextBuilder.Append('<documentoProveedor>' + PurchRcptHeader."Vendor Order No." + '</documentoProveedor>');
-        TextBuilder.Append('<documentoTransporte>' + PurchRcptHeader."Vendor Shipment No." + '</documentoTransporte>');
+        TextBuilder.Append('<documentoTrasporte>' + PurchRcptHeader."Vendor Shipment No." + '</documentoTrasporte>');
         TextBuilder.Append('<totalEntrada>' + Format(totalEntrada) + '</totalEntrada>');
         TextBuilder.Append('<idPedido>' + PurchRcptHeader."Order No." + '</idPedido>');
         TextBuilder.Append('<indImpuestos>' + 'N' + '</indImpuestos>');
@@ -114,15 +123,15 @@ codeunit 50100 "Ditech_MessageMgt"
         file.DownloadFromStream(InStream, DialogTitleLabelMsg, '', '', FileName);
     end;
 
-    local procedure RequestWS(TextBuilder: TextBuilder; ActionName: Text; ActionParameter: Text; Url: Text; SoapAction: Text; NameSpace: Text; NameSpaceValue: Text): Text
+    local procedure RequestWS(TextBuilder: TextBuilder; ActionName: Text; ActionParameter: Text; Url: Text; NameSpace: Text; NameSpaceValue: Text; var ReturnText: Text[500]) Success: Boolean
     var
         HttpContent: HttpContent;
         HttpHeader: HttpHeaders;
         TxtContent: TextBuilder;
         TxtJSON: Text;
-        Autext: Text;
         HttpClient: HttpClient;
-    // HttpResponseMessage: HttpResponseMessage;
+        HttpResponseMessage: HttpResponseMessage;
+        Text: Text;
     begin
         TxtContent.Append('<?xml version="1.0"?>');
         TxtContent.Append('<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:' + NameSpace + '="' + NameSpaceValue + '">');
@@ -142,18 +151,21 @@ codeunit 50100 "Ditech_MessageMgt"
         HttpContent.WriteFrom(TxtJSON);
         HttpContent.GetHeaders(HttpHeader);
         HttpHeader.Remove('Content-Type');
-        HttpHeader.Remove('SOAPAction');
+        // HttpHeader.Remove('SOAPAction');
         HttpHeader.add('Content-Type', 'text/xml;charset=utf-8');
-        HttpHeader.add('SOAPAction', SoapAction);
-        HttpClient.DefaultRequestHeaders.add('cache-control', 'no-cache');
-        // if HttpClient.Post(url, HttpContent, HttpResponseMessage) then begin
-        //     if not HttpResponseMessage.IsSuccessStatusCode then
-        //         Error('Devuelve :\\Status code: %1\Description: %2', HttpResponseMessage.HttpStatusCode, HttpResponseMessage.ReasonPhrase);
-        //     HttpResponseMessage.Content.ReadAs(Autext);
-        // Message('Peticion:\\%1\\Respuesta:\\%2', TxtJSON, Autext);
-        Export_XMLSend_toFile(TxtJSON, ActionName + 'Peticion');
-        // Export_XMLSend_toFile(Autext, ActionName + 'Respuesta');
-        exit(Autext);
-        // end;
+        // HttpHeader.add('SOAPAction', SoapAction);
+        // HttpClient.DefaultRequestHeaders.add('cache-control', 'no-cache');
+        if HttpClient.Post(url, HttpContent, HttpResponseMessage) then begin
+            if HttpResponseMessage.IsSuccessStatusCode then
+                Success := true
+            else
+                Success := false;
+            //     Error('Devuelve :\\Status code: %1\Description: %2', HttpResponseMessage.HttpStatusCode, HttpResponseMessage.ReasonPhrase);
+            HttpResponseMessage.Content.ReadAs(Text);
+            ReturnText := CopyStr(Text, 1, 500);
+            Message('Peticion:\\%1\\Respuesta:\\%2', TxtJSON, Text);
+            // Export_XMLSend_toFile(TxtJSON, ActionName + 'Peticion');
+            // Export_XMLSend_toFile(Autext, ActionName + 'Respuesta');
+        end;
     end;
 }

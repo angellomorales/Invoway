@@ -14,6 +14,7 @@ pageextension 50100 "Ditech_PostedPurchaseReceipts" extends "Posted Purchase Rec
                 ToolTip = 'Indica el error al timbrar';
             }
         }
+        // falta suscribir para que cuando se registre, se genere y probar con webservice directamente
     }
     actions
     {
@@ -38,7 +39,9 @@ pageextension 50100 "Ditech_PostedPurchaseReceipts" extends "Posted Purchase Rec
                 var
                     MessageMgt: Codeunit Ditech_MessageMgt;
                 begin
-                    MessageMgt.EntradaMercancia(Rec);
+
+                    if not rec."Ditech_Invoway Timbrado" then
+                        MessageMgt.EntradaMercancia(Rec);
                 end;
             }
         }
